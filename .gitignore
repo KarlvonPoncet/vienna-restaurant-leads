@@ -1,0 +1,37 @@
+# Local runtime state and source payloads (never commit real snapshots)
+data/
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+cache/
+snapshots/
+*.osm
+*.osm.json
+*.pbf
+
+# Contact data and generated local review artifacts
+contacts/
+contact-data/
+exports/
+drafts/
+*.eml
+*.draft.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
