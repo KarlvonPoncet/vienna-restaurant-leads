@@ -4,6 +4,12 @@ A small **local-only** Python 3 + SQLite MVP for reviewing Vienna restaurant bus
 
 There are no third-party runtime dependencies. The application does not crawl Google Maps or other directories, use Nominatim for bulk discovery, bypass access controls, call remote models, send SMTP, host email, add tracking pixels, or infer personal traits.
 
+## Future product vision (roadmap, not implemented)
+
+An AI sales assistant that helps small web agencies find restaurants with outdated websites and prepare personalized outreach. In a future roadmap—not current MVP functionality—it may find restaurants in Vienna, inspect their websites, detect poor mobile usability, missing reservations, weak SEO, or outdated design, find contact information, generate personalized pitches, and store leads in a pipeline.
+
+The current MVP remains local-only and draft-only: it does not scrape, use remote models, or send automated email.
+
 ## Quick start
 
 From the repository root:
