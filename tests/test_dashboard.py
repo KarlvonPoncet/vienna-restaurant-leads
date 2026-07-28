@@ -72,6 +72,8 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("https://", html)
         self.assertIn("/api/templates", html)
         self.assertIn("draft-html-preview", html)
+        self.assertIn('toggle.id = "draft-preview-toggle"', html)
+        self.assertIn('text($("draft-preview-toggle"), "Show plain-text/source")', html)
         self.assertIn("Show plain-text/source", html)
         self.assertIn("Save local draft", html)
         self.assertEqual(self.server.server_address[0], "127.0.0.1")
@@ -137,7 +139,10 @@ class DashboardTests(unittest.TestCase):
         ) as response:
             self.assertEqual(response.status, 201)
             eml_result = json.loads(response.read().decode("utf-8"))
-        eml = (self.draft_dir / eml_result["name"]).read_text(encoding="utf-8")
+        eml_bytes = (self.draft_dir / eml_result["name"]).read_bytes()
+        self.assertNotIn(b"\n", eml_bytes.replace(b"\r\n", b""))
+        self.assertTrue(eml_bytes.endswith(b"\r\n"))
+        eml = eml_bytes.decode("utf-8")
         self.assertIn("To: reviewed@example.invalid", eml)
         self.assertIn("X-Vienna-Restaurant-Leads-Draft: local-only; not sent", eml)
         listed = self._json_get("/api/drafts")
@@ -167,6 +172,8 @@ class DashboardTests(unittest.TestCase):
             recipient="restaurant@example.invalid",
             score=score,
         )
+        self.assertNotIn("\n", eml.replace("\r\n", ""))
+        self.assertTrue(eml.endswith("\r\n"))
         message = BytesParser(policy=policy.default).parsebytes(eml.encode("utf-8"))
         self.assertTrue(message.is_multipart())
         self.assertEqual(message.get_content_subtype(), "alternative")

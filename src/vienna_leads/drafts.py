@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from email import policy
 from email.message import EmailMessage
 from email.utils import formatdate
 from html import escape as escape_html
@@ -260,7 +261,7 @@ def render_eml(
     # that cannot render HTML, while the HTML part is email-safe and inline-only.
     message.set_content(render_template(template_id, record, score=score))
     message.add_alternative(render_template_html(template_id, record, score=score), subtype="html")
-    return message.as_string()
+    return message.as_bytes(policy=policy.SMTP).decode("utf-8")
 
 
 def write_template_eml_draft(
@@ -274,9 +275,14 @@ def write_template_eml_draft(
 ) -> Path:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        render_eml(record, sender=sender, recipient=recipient, score=score, template_id=template_id),
-        encoding="utf-8",
+    output.write_bytes(
+        render_eml(
+            record,
+            sender=sender,
+            recipient=recipient,
+            score=score,
+            template_id=template_id,
+        ).encode("utf-8")
     )
     return output
 
