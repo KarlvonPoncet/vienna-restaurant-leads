@@ -8,8 +8,13 @@ import sqlite3
 import sys
 
 from . import DEFAULT_USER_AGENT, RETENTION_DAYS
+from .dashboard import serve_dashboard
 from .db import connect_db, open_db
-from .drafts import write_eml_draft, write_markdown_draft
+from .drafts import (
+    TEMPLATE_IDS,
+    write_template_eml_draft,
+    write_template_markdown_draft,
+)
 from .duplicates import generate_duplicate_candidates
 from .exports import export_all
 from .scoring import confirm_score, score_records
@@ -101,8 +106,14 @@ def build_parser() -> StructuredArgumentParser:
     draft.add_argument("--place-id", type=int, required=True, help="record ID")
     draft.add_argument("--out", required=True, help="local output path")
     draft.add_argument("--format", choices=("md", "eml"), default="md", help="draft format (default: md)")
+    draft.add_argument("--template", choices=TEMPLATE_IDS, default="friendly-refresh", help="one of the three local proposal templates")
     draft.add_argument("--from", dest="sender", default="local-review@example.invalid", help="From address for .eml")
     draft.add_argument("--to", dest="recipient", help="To address for .eml; no address is guessed")
+
+    dashboard = subparsers.add_parser("dashboard", help="serve the interactive dashboard on 127.0.0.1")
+    _db_argument(dashboard)
+    dashboard.add_argument("--draft-dir", default="drafts", help="local directory for proposal drafts")
+    dashboard.add_argument("--port", type=int, default=8765, help="local TCP port (default: 8765; use 0 for a test port)")
 
     records = subparsers.add_parser("list", help="list local review records")
     _db_argument(records)
@@ -235,6 +246,10 @@ def run(args: argparse.Namespace) -> int:
         _emit(["status: exported"] + [f"{kind}: {path}" for kind, path in paths.items()])
         return 0
 
+    if args.command == "dashboard":
+        serve_dashboard(args.db, args.draft_dir, port=args.port)
+        return 0
+
     if args.command == "draft":
         with open_db(args.db) as connection:
             row, score = _record_with_score(connection, args.place_id)
@@ -248,13 +263,14 @@ def run(args: argparse.Namespace) -> int:
 
                 score_dict["reason_codes"] = json.loads(score_dict.pop("reason_codes_json"))
             if args.format == "md":
-                output = write_markdown_draft(args.out, record, score=score_dict)
+                output = write_template_markdown_draft(args.out, args.template, record, score=score_dict)
             else:
-                recipient = args.recipient or record.get("email", "")
+                recipient = args.recipient or ""
                 if not recipient:
                     raise ValueError("--to is required for .eml; no recipient is guessed")
-                output = write_eml_draft(
+                output = write_template_eml_draft(
                     args.out,
+                    args.template,
                     record,
                     sender=args.sender,
                     recipient=recipient,

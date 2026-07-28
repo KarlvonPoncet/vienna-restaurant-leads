@@ -89,9 +89,29 @@ This writes:
 
 Every generated format includes both required notices: OpenStreetMap contributors and ODbL 1.0, plus City of Vienna and CC BY 4.0 metadata (including license URLs).
 
-### 6. Write an unsent proposal draft
+### 6. Launch the local interactive dashboard
 
-Score first, inspect locally, and confirm any score manually if a value over 70 is appropriate:
+The dependency-free dashboard reads the SQLite database and binds **only** to `127.0.0.1`. It provides lead search/filter/sort, score explanations, provenance, duplicate candidates, suppression/review state, existing draft links, and three selectable draft templates. It has no telemetry, external assets, or hosted mode.
+
+```sh
+export PYTHONPATH="$PWD/src"
+python3 -m vienna_leads dashboard \
+  --db data/vienna-leads.sqlite3 \
+  --draft-dir drafts \
+  --port 8765
+```
+
+Then review `http://127.0.0.1:8765/` in a local browser. Stop the server with `Ctrl-C`. The port may be `0` for an ephemeral local test port; the host is intentionally not configurable.
+
+The dashboard exposes only local review routes such as `/api/leads`, `/api/leads/<id>`, `/api/duplicates`, `/api/templates`, `/api/draft-preview/<id>?template=<id>`, and `/api/drafts`. A draft POST writes a deterministic local Markdown or RFC 5322 `.eml` file and reports `delivery: none`; it cannot send mail. The exactly three templates are:
+
+- `friendly-refresh`: friendly website refresh;
+- `practical-visibility`: practical online visibility and booking improvement;
+- `premium-concept`: premium custom website concept.
+
+### 7. Write an unsent proposal draft
+
+Score first, inspect locally, and confirm any score manually if a value over 70 is appropriate. The `--template` flag accepts exactly the three dashboard templates above and defaults to `friendly-refresh`:
 
 ```sh
 python3 -m vienna_leads confirm-score \
@@ -99,7 +119,7 @@ python3 -m vienna_leads confirm-score \
 
 python3 -m vienna_leads draft \
   --db data/vienna-leads.sqlite3 --place-id 123 \
-  --out drafts/123.md --format md
+  --out drafts/123.md --format md --template friendly-refresh
 
 python3 -m vienna_leads draft \
   --db data/vienna-leads.sqlite3 --place-id 123 \
@@ -139,4 +159,4 @@ Automated values are clamped to 0–70. A human can explicitly confirm a 0–100
 - A source's terms should be reviewed before import. The generated artifacts carry ODbL and CC BY 4.0 notices even when a database is empty.
 - Duplicate matching is a suggestion only. Reviewers decide whether records represent the same business.
 - All proposal wording is a generic review starting point and must be checked by a human. Nothing in this repository sends cold outreach.
-- The MVP is intentionally local and bounded; it does not provide a crawler, bulk geocoder, directory scraper, hosted review UI, CRM, or email delivery system.
+- The MVP is intentionally local and bounded; it does not provide a crawler, bulk geocoder, directory scraper, hosted (non-local) review UI, CRM, or email delivery system.
