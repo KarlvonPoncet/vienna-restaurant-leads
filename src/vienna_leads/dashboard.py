@@ -19,6 +19,7 @@ from .db import connect_db
 from .drafts import (
     TEMPLATE_IDS,
     render_template,
+    render_template_html,
     template_catalog,
     write_template_eml_draft,
     write_template_markdown_draft,
@@ -287,7 +288,7 @@ def dashboard_html() -> str:
 body{font:15px system-ui,sans-serif;line-height:1.4;max-width:1440px;margin:0 auto;padding:1.25rem;color:var(--ink)}
 h1{margin:.2rem 0}.subtitle,.muted{color:var(--muted)}.notice{background:var(--warn);border:1px solid #e4c65c;padding:.8rem;margin:1rem 0;border-radius:5px}
 .controls{display:flex;flex-wrap:wrap;gap:.5rem;align-items:end;padding:.75rem 0}.controls label{display:flex;flex-direction:column;font-size:.85rem;color:var(--muted)}input,select,button{font:inherit;padding:.35rem .5rem;border:1px solid #aeb4bc;border-radius:4px;background:#fff}button{cursor:pointer;color:var(--accent);font-weight:600}button:hover{background:#eef3fd}
-.layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr);gap:1rem}.panel{border:1px solid var(--line);border-radius:5px;padding:1rem;min-width:0}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:.45rem;text-align:left;vertical-align:top}th{background:#f5f6f7;position:sticky;top:0}.table-wrap{max-height:66vh;overflow:auto}.score{font-weight:700}.suppressed{color:#8a1c1c}.tag{display:inline-block;border-radius:3px;background:#eef0f2;padding:.1rem .3rem;margin:.1rem}.detail-grid{display:grid;grid-template-columns:max-content 1fr;gap:.25rem .75rem}.detail-grid dt{font-weight:700}.detail-grid dd{margin:0;overflow-wrap:anywhere}pre{white-space:pre-wrap;background:#f5f6f7;padding:.75rem;max-height:30rem;overflow:auto}.draft-actions{display:flex;flex-wrap:wrap;gap:.4rem;align-items:end}.draft-actions label{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted)}
+.layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr);gap:1rem}.panel{border:1px solid var(--line);border-radius:5px;padding:1rem;min-width:0}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:.45rem;text-align:left;vertical-align:top}th{background:#f5f6f7;position:sticky;top:0}.table-wrap{max-height:66vh;overflow:auto}.score{font-weight:700}.suppressed{color:#8a1c1c}.tag{display:inline-block;border-radius:3px;background:#eef0f2;padding:.1rem .3rem;margin:.1rem}.detail-grid{display:grid;grid-template-columns:max-content 1fr;gap:.25rem .75rem}.detail-grid dt{font-weight:700}.detail-grid dd{margin:0;overflow-wrap:anywhere}pre{white-space:pre-wrap;background:#f5f6f7;padding:.75rem;max-height:30rem;overflow:auto}.draft-actions{display:flex;flex-wrap:wrap;gap:.4rem;align-items:end}.draft-actions label{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted)}.email-preview{border:1px solid var(--line);background:#eef0f2;padding:.75rem;margin-top:.75rem}.email-preview iframe{display:block;width:100%;min-height:460px;border:1px solid var(--line);background:#fff}.email-preview pre{background:#fff;max-height:460px;margin:.75rem 0 0 0}
 @media(max-width:900px){.layout{grid-template-columns:1fr}}
 </style>
 </head>
@@ -353,7 +354,7 @@ h1{margin:.2rem 0}.subtitle,.muted{color:var(--muted)}.notice{background:var(--w
     const formatLabel = document.createElement("label"); text(formatLabel, "Format"); const format = document.createElement("select"); format.id = "draft-format";
     [["md", "Markdown"], ["eml", "RFC 5322 .eml"]].forEach(([value, label]) => { const option = document.createElement("option"); option.value = value; text(option, label); format.appendChild(option); }); formatLabel.appendChild(format); section.appendChild(formatLabel);
     const recipientLabel = document.createElement("label"); text(recipientLabel, "Explicit .eml recipient (optional for Markdown)"); const recipient = document.createElement("input"); recipient.id = "recipient"; recipient.placeholder = "name@example.invalid"; recipientLabel.appendChild(recipient); section.appendChild(recipientLabel);
-    const preview = document.createElement("button"); preview.type = "button"; text(preview, "Preview"); preview.addEventListener("click", async () => { try { const body = await json(`/api/draft-preview/${detail.record_id}?template=${encodeURIComponent(select.value)}`); text($("draft-preview"), body.markdown); } catch (error) { text($("draft-preview"), error.message); } }); section.appendChild(preview);
+    const preview = document.createElement("button"); preview.type = "button"; text(preview, "Preview"); preview.addEventListener("click", async () => { try { const body = await json(`/api/draft-preview/${detail.record_id}?template=${encodeURIComponent(select.value)}`); const frame = $("draft-html-preview"); frame.srcdoc = body.html; text($("draft-source"), body.markdown); frame.hidden = false; $("draft-source").hidden = true; } catch (error) { text($("draft-source"), error.message); $("draft-source").hidden = false; } }); section.appendChild(preview);
     const save = document.createElement("button"); save.type = "button"; text(save, "Save local draft"); save.addEventListener("click", async () => { try { const body = await json("/api/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lead_id: detail.record_id, template: select.value, format: format.value, recipient: recipient.value }) }); text($("draft-result"), `Saved locally: ${body.name}`); await loadDetail(detail.record_id); } catch (error) { text($("draft-result"), error.message); } }); section.appendChild(save);
     return section;
   }
@@ -367,7 +368,13 @@ h1{margin:.2rem 0}.subtitle,.muted{color:var(--muted)}.notice{background:var(--w
       const provH = document.createElement("h3"); text(provH, "Provenance"); target.appendChild(provH); const prov = document.createElement("pre"); text(prov, JSON.stringify(detail.provenance, null, 2)); target.appendChild(prov);
       const dupH = document.createElement("h3"); text(dupH, "Duplicate candidates"); target.appendChild(dupH); const dup = document.createElement("pre"); text(dup, JSON.stringify(detail.duplicate_candidates, null, 2)); target.appendChild(dup);
       const draftH = document.createElement("h3"); text(draftH, "Local proposal drafts"); target.appendChild(draftH); const draftLinks = document.createElement("p"); linkList(draftLinks, detail.drafts); target.appendChild(draftLinks);
-      target.appendChild(renderTemplateControls(detail)); const preview = document.createElement("pre"); preview.id = "draft-preview"; text(preview, "Choose a template and preview it here."); target.appendChild(preview); const result = document.createElement("p"); result.id = "draft-result"; target.appendChild(result);
+      target.appendChild(renderTemplateControls(detail));
+      const previewBox = document.createElement("section"); previewBox.id = "draft-preview"; previewBox.className = "email-preview";
+      const previewHeading = document.createElement("h4"); text(previewHeading, "Rendered email preview"); previewBox.appendChild(previewHeading);
+      const frame = document.createElement("iframe"); frame.id = "draft-html-preview"; frame.title = "Rendered email preview"; frame.setAttribute("sandbox", ""); frame.srcdoc = '<p style="font-family:Arial,sans-serif;padding:16px">Choose Preview to render the selected email template.</p>'; previewBox.appendChild(frame);
+      const toggle = document.createElement("button"); toggle.type = "button"; text(toggle, "Show plain-text/source"); toggle.addEventListener("click", () => { const source = $("draft-source"); source.hidden = !source.hidden; frame.hidden = !source.hidden; toggle.textContent = source.hidden ? "Show plain-text/source" : "Show rendered HTML"; }); previewBox.appendChild(toggle);
+      const source = document.createElement("pre"); source.id = "draft-source"; source.hidden = true; text(source, ""); previewBox.appendChild(source); target.appendChild(previewBox);
+      const result = document.createElement("p"); result.id = "draft-result"; target.appendChild(result);
     } catch (error) { text($("detail"), error.message); }
   }
   async function loadDuplicates() { const body = await json("/api/duplicates"); const target = $("duplicates"); target.replaceChildren(); body.duplicates.forEach((item) => { const row = document.createElement("tr"); cell(row, item.candidate_id); cell(row, `${item.record_a} ↔ ${item.record_b}`); cell(row, item.method); cell(row, item.confidence); cell(row, item.status); target.appendChild(row); }); }
@@ -495,9 +502,10 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                 try:
                     record, score = _load_lead_for_draft(connection, record_id)
                     markdown = render_template(template_id, record, score=score)
+                    html = render_template_html(template_id, record, score=score)
                 finally:
                     connection.close()
-                self._json(HTTPStatus.OK, {"template": template_id, "lead_id": record_id, "markdown": markdown, "delivery": "none", "local_only": True})
+                self._json(HTTPStatus.OK, {"template": template_id, "lead_id": record_id, "markdown": markdown, "html": html, "preview_format": "text/html", "delivery": "none", "local_only": True})
                 return
             if path == "/api/drafts":
                 drafts = list_local_drafts(self.server.draft_dir)

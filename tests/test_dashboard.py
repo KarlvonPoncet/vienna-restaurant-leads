@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from email import policy
+from email.parser import BytesParser
 import json
 from pathlib import Path
 import tempfile
@@ -11,6 +13,7 @@ from urllib.request import Request, urlopen
 
 from vienna_leads.dashboard import create_server
 from vienna_leads.db import connect_db
+from vienna_leads.drafts import TEMPLATE_IDS, render_eml, render_template_html
 from vienna_leads.scoring import score_records
 from vienna_leads.sources import ingest_city_bytes
 from vienna_leads.suppression import add_suppression
@@ -68,6 +71,8 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("<script src=", html)
         self.assertNotIn("https://", html)
         self.assertIn("/api/templates", html)
+        self.assertIn("draft-html-preview", html)
+        self.assertIn("Show plain-text/source", html)
         self.assertIn("Save local draft", html)
         self.assertEqual(self.server.server_address[0], "127.0.0.1")
 
@@ -107,6 +112,12 @@ class DashboardTests(unittest.TestCase):
             self.assertIn("Test Bistro", preview["markdown"])
             self.assertIn("https://example.invalid", preview["markdown"])
             self.assertIn("opt out", preview["markdown"])
+            self.assertIn("## Explicit review evidence", preview["markdown"])
+            self.assertNotIn("<!doctype html>", preview["markdown"])
+            self.assertEqual(preview["preview_format"], "text/html")
+            self.assertIn("<!doctype html>", preview["html"])
+            self.assertIn("Test Bistro", preview["html"])
+            self.assertNotIn("<script", preview["html"].casefold())
             drafts.append(preview["markdown"])
             with self._post("/api/drafts", {"lead_id": 1, "template": template_id, "format": "md"}) as response:
                 self.assertEqual(response.status, 201)
@@ -134,6 +145,38 @@ class DashboardTests(unittest.TestCase):
         with self._get(eml_result["url"]) as response:
             self.assertEqual(response.status, 200)
             self.assertIn("local-only; not sent", response.read().decode("utf-8"))
+
+    def test_html_escapes_lead_values_and_eml_is_multipart_alternative(self) -> None:
+        record = {
+            "name": '<img src=x onerror="alert(1)">',
+            "address": '<b>unsafe address</b>',
+            "website": 'https://example.invalid/?q=1&x=2',
+        }
+        score = {"score": 70, "reason_codes": ["<derived-code>"]}
+        html = render_template_html(TEMPLATE_IDS[0], record, score=score)
+        self.assertIn("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;", html)
+        self.assertIn("&lt;b&gt;unsafe address&lt;/b&gt;", html)
+        self.assertNotIn('<img src=x onerror="alert(1)">', html)
+        self.assertNotIn("<script", html.casefold())
+        self.assertNotIn("<style", html.casefold())
+        self.assertNotIn("url(", html.casefold())
+
+        eml = render_eml(
+            record,
+            sender="reviewer@example.invalid",
+            recipient="restaurant@example.invalid",
+            score=score,
+        )
+        message = BytesParser(policy=policy.default).parsebytes(eml.encode("utf-8"))
+        self.assertTrue(message.is_multipart())
+        self.assertEqual(message.get_content_subtype(), "alternative")
+        self.assertEqual(
+            {part.get_content_type() for part in message.iter_parts()},
+            {"text/plain", "text/html"},
+        )
+        html_part = next(part for part in message.iter_parts() if part.get_content_type() == "text/html")
+        self.assertIn("&lt;img", html_part.get_content())
+        self.assertIn("local-only; not sent", message["X-Vienna-Restaurant-Leads-Draft"])
 
     def test_safety_boundary_rejects_traversal_and_suppressed_drafts(self) -> None:
         with self.assertRaises(HTTPError) as context:

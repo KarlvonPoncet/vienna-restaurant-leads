@@ -103,7 +103,7 @@ python3 -m vienna_leads dashboard \
 
 Then review `http://127.0.0.1:8765/` in a local browser. Stop the server with `Ctrl-C`. The port may be `0` for an ephemeral local test port; the host is intentionally not configurable.
 
-The dashboard exposes only local review routes such as `/api/leads`, `/api/leads/<id>`, `/api/duplicates`, `/api/templates`, `/api/draft-preview/<id>?template=<id>`, and `/api/drafts`. A draft POST writes a deterministic local Markdown or RFC 5322 `.eml` file and reports `delivery: none`; it cannot send mail. The exactly three templates are:
+The dashboard exposes only local review routes such as `/api/leads`, `/api/leads/<id>`, `/api/duplicates`, `/api/templates`, `/api/draft-preview/<id>?template=<id>`, and `/api/drafts`. Selecting Preview shows an email-safe rendered HTML alternative in a sandboxed local frame; the plain-text/Markdown source is available via a toggle. Lead values are escaped, and the preview uses inline styles only with no scripts, remote assets, tracking pixels, or external fonts. A draft POST writes a deterministic local Markdown or RFC 5322 `.eml` file and reports `delivery: none`; it cannot send mail. The exactly three templates are:
 
 - `friendly-refresh`: friendly website refresh;
 - `practical-visibility`: practical online visibility and booking improvement;
@@ -127,7 +127,7 @@ python3 -m vienna_leads draft \
   --from 'reviewer@example.invalid' --to 'explicit-recipient@example.invalid'
 ```
 
-Markdown and RFC 5322 `.eml` files are written locally only. There is no mail transport, queue, recipient discovery, tracking, or send command. `.eml` generation requires an explicit recipient or an email already present in the reviewed record; no address is guessed. Suppressed records cannot produce drafts.
+Markdown and RFC 5322 `.eml` files are written locally only. Existing Markdown draft content remains the plain-text/source draft. `.eml` files contain a directly usable RFC 5322 `multipart/alternative` message with both `text/plain` and inline-only `text/html` parts. There is no mail transport, queue, recipient discovery, tracking, or send command. `.eml` generation requires an explicit recipient; no address is guessed. Suppressed records cannot produce drafts.
 
 ## Data and scoring model
 
