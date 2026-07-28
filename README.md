@@ -6,7 +6,7 @@ There are no third-party runtime dependencies. The application does not crawl Go
 
 ## Future product vision (roadmap, not implemented)
 
-An AI sales assistant that helps small web agencies find restaurants with outdated websites and prepare personalized outreach. In a future roadmap—not current MVP functionality—it may find restaurants in Vienna, inspect their websites, detect poor mobile usability, missing reservations, weak SEO, or outdated design, find contact information, generate personalized pitches, and store leads in a pipeline.
+An AI sales assistant that helps small web agencies find restaurants with outdated websites and prepare personalized outreach. In a future roadmap - not current MVP functionality - it may find restaurants in Vienna, inspect their websites, detect poor mobile usability, missing reservations, weak SEO, or outdated design, find contact information, generate personalized pitches, and store leads in a pipeline.
 
 The current MVP remains local-only and draft-only: it does not scrape, use remote models, or send automated email.
 
