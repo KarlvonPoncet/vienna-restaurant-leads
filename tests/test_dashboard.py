@@ -78,6 +78,25 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("Save local draft", html)
         self.assertEqual(self.server.server_address[0], "127.0.0.1")
 
+    def test_dashboard_markup_has_accessible_review_states_and_focus_contracts(self) -> None:
+        with self._get("/") as response:
+            html = response.read().decode("utf-8")
+        for marker in (
+            'class="skip-link"',
+            'aria-label="Lead filters"',
+            'role="status"',
+            'aria-live="polite"',
+            'aria-busy="true"',
+            "No leads match these filters.",
+            "The review queue is unavailable",
+            "Try again",
+            "focus-visible",
+            'setAttribute("sandbox", "")',
+        ):
+            self.assertIn(marker, html)
+        self.assertNotIn("linear-gradient", html.casefold())
+        self.assertNotIn("<script src=", html)
+
     def test_key_routes_filter_detail_provenance_and_drafts(self) -> None:
         health = self._json_get("/api/health")
         self.assertEqual(health["local_only"], True)
