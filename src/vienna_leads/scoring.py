@@ -46,7 +46,7 @@ def score_record(record: Mapping[str, Any], *, source_count: int = 1) -> ScoreRe
     """
     record = dict(record)
     website = str(record.get("website") or "").strip()
-    category = str(record.get("category") or "")
+    category = str(record.get("category") or "").strip()
     score = 0
     codes: list[str] = []
     explanations: list[dict[str, Any]] = []
@@ -72,19 +72,25 @@ def score_record(record: Mapping[str, Any], *, source_count: int = 1) -> ScoreRe
 
     if _is_restaurant(category):
         add("restaurant_business", 10, "The source classifies this as a restaurant business.")
+    elif not category:
+        add("category_missing", -5, "No business category was present in the reviewed record.")
     else:
         codes.append("business_category_unconfirmed")
         explanations.append(
             {
                 "code": "business_category_unconfirmed",
                 "points": 0,
-                "explanation": "Restaurant category was not explicit; no category-based points were added.",
+                "explanation": "The business category was not explicitly identified as a restaurant.",
             }
         )
 
+    for field in ("name", "address", "phone", "email"):
+        if not str(record.get(field) or "").strip():
+            add(f"{field}_missing", -5, f"No {field} was present in the reviewed business fields.")
+
     # Confidence describes the completeness of the observable fields, not the
     # likelihood that a person will respond.
-    observed = sum(bool(record.get(field)) for field in ("name", "address", "category"))
+    observed = sum(bool(str(record.get(field) or "").strip()) for field in ("name", "address", "category", "phone", "email"))
     confidence = 0.25 + observed * 0.12 + min(max(source_count, 1), 3) * 0.08
     if website:
         confidence += 0.12

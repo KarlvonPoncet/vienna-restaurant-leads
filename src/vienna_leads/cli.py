@@ -18,6 +18,7 @@ from .drafts import (
 from .duplicates import generate_duplicate_candidates
 from .exports import export_all
 from .scoring import confirm_score, score_records
+from . import SCORE_MODEL_VERSION
 from .sources import (
     DEFAULT_MAX_BYTES,
     DEFAULT_OVERPASS_ENDPOINT,
@@ -207,7 +208,7 @@ def run(args: argparse.Namespace) -> int:
     if args.command == "score":
         with open_db(args.db) as connection:
             count = score_records(connection)
-        _emit(["status: scored", f"records: {count}", "model: website-opportunity-v1", "automated_cap: 70"])
+        _emit(["status: scored", f"records: {count}", f"model: {SCORE_MODEL_VERSION}", "automated_cap: 70"])
         return 0
 
     if args.command == "confirm-score":

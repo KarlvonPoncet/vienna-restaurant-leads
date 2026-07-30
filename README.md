@@ -1,14 +1,24 @@
 # Vienna Restaurant Leads
 
-A small **local-only** Python 3 + SQLite MVP for reviewing Vienna restaurant business/web-presence signals. It keeps source payloads and provenance, suggests possible duplicates without merging them, scores website opportunities for human review, and writes static exports and unsent proposal drafts.
+## Why this exists
 
-There are no third-party runtime dependencies. The application does not crawl Google Maps or other directories, use Nominatim for bulk discovery, bypass access controls, call remote models, send SMTP, host email, add tracking pixels, or infer personal traits.
+Small web agencies often know a local business may benefit from a clearer web presence, but turning bounded public business data into a useful, reviewable opportunity takes careful evidence handling. Vienna Restaurant Leads is a **local-only, dependency-free Python + SQLite MVP** for that narrow job: preserve where a business record came from, surface a transparent website-opportunity signal, let a person review it, and produce local draft artifacts.
 
-## Future product vision (roadmap, not implemented)
+The project does not claim that a restaurant needs a new website or that anyone will respond. It makes an observable record easier to inspect: bounded source snapshots become normalized business records; provenance and conservative duplicate candidates remain attached; an explainable 0–70 automated score highlights website absence without judging site quality; a human can confirm a final 0–100 score; and exports or unsent proposal drafts provide a starting point for local review.
 
-An AI sales assistant that helps small web agencies find restaurants with outdated websites and prepare personalized outreach. In a future roadmap - not current MVP functionality - it may find restaurants in Vienna, inspect their websites, detect poor mobile usability, missing reservations, weak SEO, or outdated design, find contact information, generate personalized pitches, and store leads in a pipeline.
+### Principles and boundaries
 
-The current MVP remains local-only and draft-only: it does not scrape, use remote models, or send automated email.
+- **Local and bounded:** source access is explicit and limited; the app binds the dashboard only to `127.0.0.1` and has no hosted mode, telemetry, remote models, or third-party runtime dependencies.
+- **Evidence over inference:** raw payloads, provenance, attribution, and licenses are preserved. The scorer uses observed business/web fields, never personal or inferred traits, and never fetches a website.
+- **Human review over automation:** duplicate matches are suggestions, not merges; scores are signals, not verdicts; proposal wording needs review.
+- **Draft-only/no-send:** generated Markdown and RFC 5322 `.eml` files are local artifacts. There is no SMTP, queue, recipient discovery, tracking pixel, or send command.
+- **Privacy and attribution:** suppression stores hashes, contact retention is explicit, and generated artifacts carry source attribution and license notices.
+
+## Current MVP and future roadmap
+
+The current MVP imports a bounded Overpass snapshot or a locally reviewed City of Vienna CSV, normalizes records, preserves source evidence, suggests duplicates, scores opportunities, supports suppression/retention, and creates local exports, a local dashboard, and unsent drafts.
+
+The future vision (not implemented) is an AI sales assistant for small web agencies: it might inspect websites for mobile usability, reservations, SEO, or outdated design, find contact information, personalize pitches, and manage a pipeline. This repository currently does **not** scrape directories, bulk-geocode, inspect websites, call remote models, host a CRM, or send outreach.
 
 ## Quick start
 
@@ -20,38 +30,20 @@ python3 -m vienna_leads init-db --db data/vienna-leads.sqlite3
 python3 -m unittest discover -s tests -v
 ```
 
-`data/`, `cache/`, `exports/`, `drafts/`, SQLite files, and contact artifacts are ignored by Git. Use a disposable local database and cache for real data.
+Use disposable local databases and caches. `data/`, `cache/`, `exports/`, `drafts/`, SQLite files, and contact artifacts are ignored by Git.
 
-## Local commands
+## Workflow and operating reference
 
-### 1. Import a bounded Overpass snapshot
-
-The importer sends one explicit Vienna bounding box query for `amenity=restaurant`, uses a descriptive User-Agent, limits response size, and reuses a local cache for 24 hours by default. It does not discover businesses through a directory crawl.
+### 1. Import bounded public data
 
 ```sh
-export PYTHONPATH="$PWD/src"
-python3 -m vienna_leads ingest-overpass \
-  --db data/vienna-leads.sqlite3 \
-  --cache-dir data/cache \
-  --max-age-hours 24
+python3 -m vienna_leads ingest-overpass --db data/vienna-leads.sqlite3 --cache-dir data/cache --max-age-hours 24
+python3 -m vienna_leads ingest-city --db data/vienna-leads.sqlite3 --csv /path/to/reviewed-top-locations.csv --source-url 'https://www.data.gv.at/'
 ```
 
-The default endpoint is `https://overpass-api.de/api/interpreter`. A cached JSON response is preferred while fresh; the exact payload is also stored in SQLite with SHA-256 and request provenance. To use a different Overpass instance, pass `--endpoint` explicitly. The request remains bounded.
+Overpass uses one explicit Vienna bounding-box query for `amenity=restaurant`, a descriptive User-Agent, a response-size limit, and a 24-hour local cache by default. The exact response, SHA-256, request metadata, and attribution are stored. The City CSV is never downloaded automatically; encoding and delimiter detection support UTF-8/BOM, Windows-1252, Latin-1, comma, semicolon, and tab files. Default City metadata is `Top Locations data: City of Vienna`, `CC BY 4.0`, with its license URL.
 
-### 2. Import the reviewed City of Vienna CSV
-
-Download/review the CSV yourself, then pass its local path. The importer detects UTF-8/BOM, UTF-8, Windows-1252, and Latin-1, and sniffs comma/semicolon/tab delimiters. It never downloads a CSV on its own.
-
-```sh
-python3 -m vienna_leads ingest-city \
-  --db data/vienna-leads.sqlite3 \
-  --csv /path/to/reviewed-top-locations.csv \
-  --source-url 'https://www.data.gv.at/'
-```
-
-The default metadata is `Top Locations data: City of Vienna`, `CC BY 4.0`, and the Creative Commons license URL. Override `--source-url` with the reviewed dataset landing page if known; only change attribution/license flags when the reviewed source's terms require it.
-
-### 3. Review duplicates and score opportunities
+### 2. Find candidates and score
 
 ```sh
 python3 -m vienna_leads duplicates --db data/vienna-leads.sqlite3
@@ -59,95 +51,41 @@ python3 -m vienna_leads score --db data/vienna-leads.sqlite3
 python3 -m vienna_leads list --db data/vienna-leads.sqlite3 --limit 100
 ```
 
-Duplicate candidates are deliberately conservative (`exact_name_address`, same phone/domain with a similar name, or a similar name within 100 metres). They remain `pending` review records. No automatic merge or destructive update exists.
+Duplicate candidates remain pending review and are never automatically merged.
 
-### 4. Suppress opt-outs and apply retention
+### 3. Suppress and retain responsibly
 
 ```sh
-# Suppress a business and its stable identifiers; only hashes are stored.
 python3 -m vienna_leads suppress --db data/vienna-leads.sqlite3 --place-id 123 --reason 'requested opt-out'
-
-# Or hash a value immediately without storing the value itself.
-python3 -m vienna_leads suppress --db data/vienna-leads.sqlite3 \
-  --kind email --value 'contact@example.invalid'
-
-# Keep derived phone/email only for explicitly qualified records.
+python3 -m vienna_leads suppress --db data/vienna-leads.sqlite3 --kind email --value 'contact@example.invalid'
 python3 -m vienna_leads qualify-contact --db data/vienna-leads.sqlite3 --place-id 123
 python3 -m vienna_leads purge-contact-data --db data/vienna-leads.sqlite3 --retention-days 90
 ```
 
-The default retention period is 90 days for unqualified derived contact data. Purging removes derived phone/email and leaves provenance/raw source payloads available for audit. Suppression records contain only a hash, kind, reason, and timestamp, so an opt-out can continue to match future imports without retaining the opted-out value.
+Suppression stores only kind, reason, timestamp, and a hash. Unqualified derived phone/email data defaults to 90-day retention; purging leaves raw payloads and provenance for audit.
 
-### 5. Generate local review artifacts
-
-```sh
-python3 -m vienna_leads export \
-  --db data/vienna-leads.sqlite3 \
-  --out-dir exports/vienna-review
-```
-
-This writes:
-
-- `review.html`: self-contained static HTML with no remote assets or scripts;
-- `leads.csv`: tabular review data and attribution comment lines;
-- `leads.json`: metadata, provenance, records, scores, and candidate links;
-- `review.md`: a readable local Markdown review.
-
-Every generated format includes both required notices: OpenStreetMap contributors and ODbL 1.0, plus City of Vienna and CC BY 4.0 metadata (including license URLs).
-
-### 6. Launch the local interactive dashboard
-
-The dependency-free dashboard reads the SQLite database and binds **only** to `127.0.0.1`. It provides lead search/filter/sort, score explanations, provenance, duplicate candidates, suppression/review state, existing draft links, and three selectable draft templates. It has no telemetry, external assets, or hosted mode.
+### 4. Export and review locally
 
 ```sh
-export PYTHONPATH="$PWD/src"
-python3 -m vienna_leads dashboard \
-  --db data/vienna-leads.sqlite3 \
-  --draft-dir drafts \
-  --port 8765
+python3 -m vienna_leads export --db data/vienna-leads.sqlite3 --out-dir exports/vienna-review
+python3 -m vienna_leads dashboard --db data/vienna-leads.sqlite3 --draft-dir drafts --port 8765
 ```
 
-Then review `http://127.0.0.1:8765/` in a local browser. Stop the server with `Ctrl-C`. The port may be `0` for an ephemeral local test port; the host is intentionally not configurable.
+Exports include self-contained `review.html`, `leads.csv`, `leads.json`, and `review.md`, with OpenStreetMap/ODbL and City of Vienna/CC BY 4.0 notices and license URLs. The dashboard offers local filtering, score explanations, provenance, duplicate candidates, suppression state, and three draft templates. It has no remote assets; stop it with `Ctrl-C`.
 
-The dashboard exposes only local review routes such as `/api/leads`, `/api/leads/<id>`, `/api/duplicates`, `/api/templates`, `/api/draft-preview/<id>?template=<id>`, and `/api/drafts`. Selecting Preview shows an email-safe rendered HTML alternative in a sandboxed local frame; the plain-text/Markdown source is available via a toggle. Lead values are escaped, and the preview uses inline styles only with no scripts, remote assets, tracking pixels, or external fonts. A draft POST writes a deterministic local Markdown or RFC 5322 `.eml` file and reports `delivery: none`; it cannot send mail. The exactly three templates are:
-
-- `friendly-refresh`: friendly website refresh;
-- `practical-visibility`: practical online visibility and booking improvement;
-- `premium-concept`: premium custom website concept.
-
-### 7. Write an unsent proposal draft
-
-Score first, inspect locally, and confirm any score manually if a value over 70 is appropriate. The `--template` flag accepts exactly the three dashboard templates above and defaults to `friendly-refresh`:
+### 5. Write an unsent draft
 
 ```sh
-python3 -m vienna_leads confirm-score \
-  --db data/vienna-leads.sqlite3 --place-id 123 --score 82
-
-python3 -m vienna_leads draft \
-  --db data/vienna-leads.sqlite3 --place-id 123 \
-  --out drafts/123.md --format md --template friendly-refresh
-
-python3 -m vienna_leads draft \
-  --db data/vienna-leads.sqlite3 --place-id 123 \
-  --out drafts/123.eml --format eml \
-  --from 'reviewer@example.invalid' --to 'explicit-recipient@example.invalid'
+python3 -m vienna_leads confirm-score --db data/vienna-leads.sqlite3 --place-id 123 --score 82
+python3 -m vienna_leads draft --db data/vienna-leads.sqlite3 --place-id 123 --out drafts/123.md --format md --template friendly-refresh
+python3 -m vienna_leads draft --db data/vienna-leads.sqlite3 --place-id 123 --out drafts/123.eml --format eml --from 'reviewer@example.invalid' --to 'explicit-recipient@example.invalid'
 ```
 
-Markdown and RFC 5322 `.eml` files are written locally only. Existing Markdown draft content remains the plain-text/source draft. `.eml` files contain a directly usable RFC 5322 `multipart/alternative` message with both `text/plain` and inline-only `text/html` parts. There is no mail transport, queue, recipient discovery, tracking, or send command. `.eml` generation requires an explicit recipient; no address is guessed. Suppressed records cannot produce drafts.
+Templates are `friendly-refresh`, `practical-visibility`, and `premium-concept`. Suppressed records cannot produce drafts; `.eml` generation requires an explicit recipient and performs no delivery.
 
-## Data and scoring model
+## Scoring model
 
-SQLite tables are created by `src/vienna_leads/db.py`:
-
-- `source_payloads` stores exact raw bytes, content type, encoding, capture time, and SHA-256;
-- `source_runs` stores endpoint/cache/request metadata and attribution/license;
-- `records` stores normalized business fields plus the original row JSON;
-- `provenance` links every record to its source run and source key;
-- `duplicate_candidates` stores review suggestions and status, never merged records;
-- `scores` stores model version, automated score, final score, reason codes, explanations, confidence, and human-confirmation state;
-- `suppression_records` stores only hashed opt-out identities.
-
-The current model is `website-opportunity-v1`. It uses only observed business/web fields and never fetches a website:
+The current model is `website-opportunity-v2`. It is versioned because missing qualification data now reduces the opportunity signal. It uses no coordinates or source/provenance metadata for points and never fetches URLs.
 
 | Signal | Automated points |
 | --- | ---: |
@@ -156,13 +94,14 @@ The current model is `website-opportunity-v1`. It uses only observed business/we
 | HTTP-only website | +20 |
 | HTTPS website present | +5 |
 | explicit restaurant category | +10 |
+| missing `name` | -5 |
+| missing `address` | -5 |
+| missing `category` | -5 |
+| missing `phone` | -5 |
+| missing `email` | -5 |
 
-Automated values are clamped to 0–70. A human can explicitly confirm a 0–100 final score with `confirm-score`; rescoring preserves that confirmed value while refreshing the automated score and explanations. Confidence describes completeness of observable business fields and source coverage, not a person or response likelihood.
+Applicable signals are summed and clamped to **0–70**. A missing website remains positive even when other fields are missing. A missing category gets the -5 penalty and does not also receive the restaurant +10. Rescoring refreshes the automated score, explanations, and confidence while preserving an existing human-confirmed final score. `confirm-score` permits an explicitly reviewed final value from 0–100.
 
-## Safety and attribution boundaries
+## Data model and safety
 
-- Source payloads and provenance are preserved for reproducibility; raw payloads are not used to infer personal traits.
-- A source's terms should be reviewed before import. The generated artifacts carry ODbL and CC BY 4.0 notices even when a database is empty.
-- Duplicate matching is a suggestion only. Reviewers decide whether records represent the same business.
-- All proposal wording is a generic review starting point and must be checked by a human. Nothing in this repository sends cold outreach.
-- The MVP is intentionally local and bounded; it does not provide a crawler, bulk geocoder, directory scraper, hosted (non-local) review UI, CRM, or email delivery system.
+SQLite tables (defined in `src/vienna_leads/db.py`) store raw source payloads, source runs, normalized records, provenance, duplicate candidates, versioned scores, and hashed suppression records. Generated artifacts are local review material only. Review source terms before import, verify attribution and recipient details, honor suppression, and treat every proposal as a human-edited draft.
