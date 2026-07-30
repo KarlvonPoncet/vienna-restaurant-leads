@@ -92,6 +92,8 @@ class DashboardTests(unittest.TestCase):
             "Try again",
             "focus-visible",
             'setAttribute("sandbox", "")',
+            '["Automated score", detail.automated_score',
+            '["Confidence", detail.confidence]',
         ):
             self.assertIn(marker, html)
         self.assertNotIn("linear-gradient", html.casefold())
