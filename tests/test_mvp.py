@@ -112,18 +112,50 @@ class MvpTests(unittest.TestCase):
         self.assertEqual(self.connection.execute("SELECT COUNT(*) FROM records").fetchone()[0], 3)
 
     def test_scoring_is_explainable_capped_and_human_confirmable(self) -> None:
-        result = score_record({"name": "A", "address": "B", "category": "restaurant", "website": ""})
+        result = score_record(
+            {"name": "A", "address": "B", "category": "restaurant", "phone": "P", "email": "E", "website": ""}
+        )
         self.assertEqual(result.automated_score, 70)
         self.assertIn("website_missing", result.reason_codes)
         self.assertIn("restaurant_business", result.reason_codes)
         self.assertGreaterEqual(result.confidence, 0)
         self.assertLessEqual(result.confidence, 1)
 
+    def test_scoring_penalizes_each_missing_qualification_field(self) -> None:
+        fields = ("name", "address", "category", "phone", "email")
+        for field in fields:
+            record = {key: "present" for key in fields}
+            record["category"] = "restaurant"
+            record["website"] = "https://example.test"
+            record[field] = ""
+            result = score_record(record)
+            self.assertEqual(result.automated_score, 5 - 5 + (10 if field != "category" else 0))
+            self.assertIn(f"{field}_missing", result.reason_codes)
+            explanation = next(item for item in result.explanations if item["code"] == f"{field}_missing")
+            self.assertEqual(explanation["points"], -5)
+
+    def test_scoring_combines_penalties_and_clamps(self) -> None:
+        result = score_record({"website": "https://example.test"})
+        self.assertEqual(result.automated_score, 0)
+        self.assertEqual(
+            {item["code"] for item in result.explanations if item["points"] < 0},
+            {"name_missing", "address_missing", "category_missing", "phone_missing", "email_missing"},
+        )
+
+    def test_complete_record_has_no_missing_penalties(self) -> None:
+        result = score_record(
+            {"name": "A", "address": "B", "category": "restaurant", "phone": "P", "email": "E", "website": "https://example.test"}
+        )
+        self.assertEqual(result.automated_score, 15)
+        self.assertFalse(any(item["points"] < 0 for item in result.explanations))
+
+    def test_human_confirmed_score_survives_rescoring(self) -> None:
         ids = ingest_overpass_bytes(self.connection, OVERPASS_FIXTURE)
         score_records(self.connection)
         confirm_score(self.connection, ids[0], 88)
+        score_records(self.connection)
         row = self.connection.execute("SELECT * FROM scores WHERE record_id = ?", (ids[0],)).fetchone()
-        self.assertEqual(row["automated_score"], 70)
+        self.assertEqual(row["automated_score"], 65)
         self.assertEqual(row["score"], 88)
         self.assertEqual(row["human_confirmed"], 1)
         self.assertTrue(json.loads(row["reason_codes_json"]))
